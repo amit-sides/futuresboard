@@ -99,8 +99,6 @@ def send_signed_request(http_method, url_path, payload={}, exchange="binance"):
     url = f"{current_app.config['API_BASE_URL']}{url_path}?{query_string}"
     if exchange == "binance":
         url += f"&signature={hashing(query_string, exchange)}"
-
-    # print("{} {}".format(http_method, url))
     params = {"url": url, "params": {}}
     try:
         timestamp = get_timestamp()
@@ -121,7 +119,7 @@ def send_signed_request(http_method, url_path, payload={}, exchange="binance"):
                     url=url, code=json_response["retCode"], msg=json_response["retMsg"]
                 )
         return headers, json_response
-    except requests.exceptions.ConnectionError as e:
+    except (requests.exceptions.ConnectionError, requests.exceptions.JSONDecodeError) as e:
         raise HTTPRequestError(url=url, code=-1, msg=f"{e}")
 
 
@@ -131,7 +129,6 @@ def send_public_request(url_path, payload={}):
     url = current_app.config["API_BASE_URL"] + url_path
     if query_string:
         url = url + "?" + query_string
-    # print("{}".format(url))
     try:
         response = dispatch_request("GET")(url=url)
         headers = response.headers
@@ -141,7 +138,7 @@ def send_public_request(url_path, payload={}):
                 url=url, code=json_response["code"], msg=json_response["msg"]
             )
         return headers, json_response
-    except requests.exceptions.ConnectionError as e:
+    except (requests.exceptions.ConnectionError, requests.exceptions.JSONDecodeError) as e:
         raise HTTPRequestError(url=url, code=-2, msg=f"{e}")
 
 
