@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import datetime
 import hashlib
 import hmac
 import sqlite3
 import threading
 import time
 from collections import OrderedDict
-from datetime import timedelta
+from datetime import datetime, timedelta
 from sqlite3 import Error
 from urllib.parse import urlencode
 
@@ -108,7 +107,10 @@ def send_signed_request(http_method, url_path, payload={}, exchange="binance"):
             timestamp=timestamp,
         )(**params)
         headers = response.headers
-        json_response = response.json()
+        try:
+            json_response = response.json()
+        except requests.exceptions.JSONDecodeError as e:
+            raise HTTPRequestError(url=url, code=-3, msg=f"{e}")
         if "code" in json_response:
             raise HTTPRequestError(
                 url=url, code=json_response["code"], msg=json_response["msg"]
@@ -132,7 +134,10 @@ def send_public_request(url_path, payload={}):
     try:
         response = dispatch_request("GET")(url=url)
         headers = response.headers
-        json_response = response.json()
+        try:
+            json_response = response.json()
+        except requests.exceptions.JSONDecodeError as e:
+            raise HTTPRequestError(url=url, code=-3, msg=f"{e}")
         if "code" in json_response:
             raise HTTPRequestError(
                 url=url, code=json_response["code"], msg=json_response["msg"]
@@ -404,9 +409,7 @@ def _scrape(app=None):
                 startTime = select_latest_income(conn)
                 if startTime is None:
                     startTime = int(
-                        datetime.datetime.fromisoformat(
-                            "2020-01-01 00:00:00+00:00"
-                        ).timestamp()
+                        datetime.fromisoformat("2020-01-01 00:00:00+00:00").timestamp()
                         * 1000
                     )
                 else:
@@ -607,16 +610,19 @@ def _scrape(app=None):
             }
             with create_connection(current_app.config["DATABASE"]) as conn:
                 startTime = select_latest_income_symbol(conn, symbol)
+                two_years_ago = datetime.now() - timedelta(days=729)
+                two_years_ago_timestamp = int(two_years_ago.timestamp() * 1000)
                 if startTime is None:
                     startTime = int(
-                        datetime.datetime.fromisoformat(
-                            "2020-01-01 00:00:00+00:00"
-                        ).timestamp()
+                        datetime.fromisoformat("2020-01-01 00:00:00+00:00").timestamp()
+                        * 1000
                     )
-                    params["startTime"] = startTime * 1000
                 else:
-                    startTime = int(startTime[0])
-                    params["startTime"] = int(startTime + 1)
+                    startTime = int(startTime[0]) + 1
+
+                if startTime < two_years_ago_timestamp:
+                    startTime = two_years_ago_timestamp
+                params["startTime"] = startTime
 
             if weightused > 50:
                 print(
